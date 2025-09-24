@@ -21,32 +21,52 @@
         .legend {
             background: rgba(255, 255, 255, 0.95);
             border-radius: 10px;
-            padding: 15px;
+            padding: 0;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.3);
+            user-select: none;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10000;
+            min-width: 200px;
+        }
+        
+        .legend-header {
+            background: #2E7D32;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 10px 10px 0 0;
+            cursor: move;
+            font-weight: bold;
+            position: relative;
+        }
+        
+        .legend-header::after {
+            content: "⋮⋮";
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.8;
+        }
+        
+        .legend-header:hover {
+            background: #1B5E20;
+        }
+        
+        .legend-content {
+            padding: 15px;
+        }
+        
+        .legend.dragging {
+            opacity: 0.8;
+            transform: scale(1.02);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
         }
         
         @media (max-width: 768px) {
-            .legend {
-                padding: 8px;
-                font-size: 12px;
-            }
-            
-            .legend h4 {
-                font-size: 13px;
-                margin: 0 0 6px 0;
-            }
-            
-            .legend-item {
-                margin: 4px 0;
-                font-size: 11px;
-            }
-            
-            .legend-circle {
-                margin-right: 6px;
-            }
-            
             .info-panel {
                 padding: 10px;
                 max-width: 200px;
@@ -96,6 +116,48 @@
             border: 1px solid rgba(255, 255, 255, 0.3);
             z-index: 1000;
             max-width: 300px;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        
+        .info-panel.hidden {
+            opacity: 0;
+            transform: translateX(-100%);
+            pointer-events: none;
+        }
+        
+        .toggle-info-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+        
+        .toggle-info-btn:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: scale(1.1);
+        }
+        
+        .toggle-info-btn.info-visible {
+            left: 340px;
+        }
+        
+        @media (max-width: 768px) {
+            .toggle-info-btn.info-visible {
+                left: 240px;
+            }
         }
         
         .info-panel h3 {
@@ -114,7 +176,9 @@
 <body>
     <div id="map"></div>
     
-    <div class="info-panel">
+    <button class="toggle-info-btn info-visible" id="toggleInfoBtn" title="Verberg/Toon info">ℹ️</button>
+    
+    <div class="info-panel" id="infoPanel">
         <h3>🏛️ Aantal gezinnen per gemeente</h3>
         <p>Klik op de bubbels om de details te zien</p>
         <p>De grootte duidt het aantal deelnemende gezinnen aan</p>
@@ -131,9 +195,30 @@
                 return;
             }
             
+            // Add toggle functionality for info panel
+            const toggleBtn = document.getElementById('toggleInfoBtn');
+            const infoPanel = document.getElementById('infoPanel');
+            let isInfoVisible = true;
+            
+            toggleBtn.addEventListener('click', function() {
+                isInfoVisible = !isInfoVisible;
+                
+                if (isInfoVisible) {
+                    infoPanel.classList.remove('hidden');
+                    toggleBtn.classList.add('info-visible');
+                    toggleBtn.innerHTML = 'ℹ️';
+                    toggleBtn.title = 'Verberg info';
+                } else {
+                    infoPanel.classList.add('hidden');
+                    toggleBtn.classList.remove('info-visible');
+                    toggleBtn.innerHTML = '📊';
+                    toggleBtn.title = 'Toon info';
+                }
+            });
+            
         // Municipality data with corrected coordinates (West Flanders region)
         const municipalityData = {
-            'Ardooie': { count: 1, lat: 50.976728, lng: 3.199116 }, // Corrected
+            'Ardooie': { count: 1, lat: 50.976728, lng: 3.199116 },
             'Beernem': { count: 5, lat: 51.1347, lng: 3.3403 },
             'Blankenberge': { count: 15, lat: 51.3133, lng: 3.1317 },
             'Bredene': { count: 1, lat: 51.2489, lng: 2.9614 },
@@ -141,7 +226,7 @@
             'De Haan': { count: 1, lat: 51.2833, lng: 3.0333 },
             'De Panne': { count: 2, lat: 51.0978, lng: 2.5931 },
             'Diksmuide': { count: 3, lat: 51.0333, lng: 2.8667 },
-            'Ichtegem': { count: 21, lat: 51.0928306, lng: 3.0106116 }, // Corrected
+            'Ichtegem': { count: 21, lat: 51.0928306, lng: 3.0106116 },
             'Ieper': { count: 11, lat: 50.8503, lng: 2.8847 },
             'Ingelmunster': { count: 5, lat: 50.9167, lng: 3.2667 },
             'Izegem': { count: 9, lat: 50.9139, lng: 3.2167 },
@@ -162,9 +247,9 @@
             'Ronse': { count: 1, lat: 50.7494, lng: 3.6003 },
             'Tielt': { count: 2, lat: 51.0000, lng: 3.3333 },
             'Torhout': { count: 3, lat: 51.0669, lng: 3.1019 },
-            'Vleteren': { count: 1, lat: 50.929707, lng: 2.732738 }, // Corrected
+            'Vleteren': { count: 1, lat: 50.929707, lng: 2.732738 },
             'Wervik': { count: 2, lat: 50.7831, lng: 3.0397 },
-            'Wingene': { count: 16, lat: 51.05865, lng: 3.274799 }, // Corrected
+            'Wingene': { count: 16, lat: 51.05865, lng: 3.274799 },
             'Zonnebeke': { count: 2, lat: 50.8667, lng: 2.9833 },
             'Zuienkerke': { count: 1, lat: 51.2833, lng: 3.1833 }
         };
@@ -180,12 +265,12 @@
 
         // Color scale function
         function getColor(count) {
-            if (count >= 30) return '#8B0000'; // Dark red for highest
-            if (count >= 20) return '#DC143C'; // Crimson
-            if (count >= 15) return '#FF4500'; // Orange red
-            if (count >= 10) return '#FF6347'; // Tomato
-            if (count >= 5) return '#FFA500';  // Orange
-            return '#FFD700'; // Gold for lowest
+            if (count >= 30) return '#8B0000';
+            if (count >= 20) return '#DC143C';
+            if (count >= 15) return '#FF4500';
+            if (count >= 10) return '#FF6347';
+            if (count >= 5) return '#FFA500';
+            return '#FFD700';
         }
 
         // Size scale function
@@ -305,13 +390,23 @@
 
             // Update total count
             document.getElementById('total-count').textContent = totalCount;
-
-            // Add legend
-            const legend = L.control({position: 'bottomright'});
-            legend.onAdd = function() {
-                const div = L.DomUtil.create('div', 'legend');
-                div.innerHTML = `
-                    <h4>Gezinnen per Gemeente</h4>
+        }
+        
+        // Create draggable legend after everything loads
+        setTimeout(createDraggableLegend, 1000);
+        }
+        
+        // Create independent draggable legend
+        function createDraggableLegend() {
+            console.log('Creating draggable legend...');
+            
+            const legend = document.createElement('div');
+            legend.className = 'legend';
+            legend.id = 'draggableLegend';
+            
+            legend.innerHTML = `
+                <div class="legend-header">Gezinnen per Gemeente</div>
+                <div class="legend-content">
                     <div class="legend-item">
                         <div class="legend-circle" style="width: 25px; height: 25px; background-color: #8B0000;"></div>
                         <span>30+ gezinnen</span>
@@ -336,11 +431,66 @@
                         <div class="legend-circle" style="width: 10px; height: 10px; background-color: #FFD700;"></div>
                         <span>1-4 gezin(nen)</span>
                     </div>
-                `;
-                return div;
-            };
-            legend.addTo(map);
+                </div>
+            `;
+            
+            document.body.appendChild(legend);
+            console.log('Legend added to document');
+            
+            // Make header draggable
+            const header = legend.querySelector('.legend-header');
+            if (header) {
+                console.log('Making header draggable');
+                makeHeaderDraggable(legend, header);
+            }
         }
+        
+        // Simple drag function for the header
+        function makeHeaderDraggable(legendElement, headerElement) {
+            let isDragging = false;
+            let startX, startY;
+            
+            headerElement.addEventListener('mousedown', function(e) {
+                console.log('Header clicked - starting drag');
+                e.preventDefault();
+                e.stopPropagation();
+                
+                isDragging = true;
+                legendElement.classList.add('dragging');
+                
+                const rect = legendElement.getBoundingClientRect();
+                startX = e.clientX - rect.left;
+                startY = e.clientY - rect.top;
+                
+                document.addEventListener('mousemove', dragHandler);
+                document.addEventListener('mouseup', stopDragHandler);
+            });
+            
+            function dragHandler(e) {
+                if (!isDragging) return;
+                console.log('Dragging legend');
+                
+                let newLeft = e.clientX - startX;
+                let newTop = e.clientY - startY;
+                
+                // Keep within bounds
+                newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - legendElement.offsetWidth));
+                newTop = Math.max(0, Math.min(newTop, window.innerHeight - legendElement.offsetHeight));
+                
+                legendElement.style.left = newLeft + 'px';
+                legendElement.style.top = newTop + 'px';
+                legendElement.style.right = 'auto';
+                legendElement.style.bottom = 'auto';
+            }
+            
+            function stopDragHandler() {
+                console.log('Stopping drag');
+                isDragging = false;
+                legendElement.classList.remove('dragging');
+                
+                document.removeEventListener('mousemove', dragHandler);
+                document.removeEventListener('mouseup', stopDragHandler);
+            }
         }
         
         // Initialize when page loads
