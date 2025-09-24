@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Woonplaats deelnemers gezinsvakanties vzw Gandalf</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #fff; /* force white background */
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .leaflet-container {
+            background: #fff; /* make sure background stays white */
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        function initMap() {
+            if (typeof L === 'undefined') {
+                setTimeout(initMap, 100);
+                return;
+            }
+
+            const municipalityData = {
+                'Ardooie': { count: 1, lat: 50.976728, lng: 3.199116 },
+                'Beernem': { count: 5, lat: 51.1347, lng: 3.3403 },
+                'Blankenberge': { count: 15, lat: 51.3133, lng: 3.1317 },
+                'Bredene': { count: 1, lat: 51.2489, lng: 2.9614 },
+                'Brugge': { count: 40, lat: 51.2093, lng: 3.2247 },
+                'De Haan': { count: 1, lat: 51.2833, lng: 3.0333 },
+                'De Panne': { count: 2, lat: 51.0978, lng: 2.5931 },
+                'Diksmuide': { count: 3, lat: 51.0333, lng: 2.8667 },
+                'Ichtegem': { count: 21, lat: 51.0928306, lng: 3.0106116 },
+                'Ieper': { count: 11, lat: 50.8503, lng: 2.8847 },
+                'Ingelmunster': { count: 5, lat: 50.9167, lng: 3.2667 },
+                'Izegem': { count: 9, lat: 50.9139, lng: 3.2167 },
+                'Knokke-Heist': { count: 1, lat: 51.3500, lng: 3.2667 },
+                'Koekelare': { count: 1, lat: 51.0908, lng: 2.9675 },
+                'Koksijde': { count: 1, lat: 51.1200, lng: 2.6367 },
+                'Kortemark': { count: 5, lat: 51.0272, lng: 3.0514 },
+                'Kortrijk': { count: 1, lat: 50.8281, lng: 3.2648 },
+                'Langemark-Poelkapelle': { count: 1, lat: 50.9167, lng: 2.9167 },
+                'Ledegem': { count: 1, lat: 50.8642, lng: 3.1311 },
+                'Lichtervelde': { count: 1, lat: 51.0311, lng: 3.1422 },
+                'Menen': { count: 27, lat: 50.7972, lng: 3.1211 },
+                'Moorslede': { count: 3, lat: 50.8833, lng: 3.0667 },
+                'Oostende': { count: 16, lat: 51.2289, lng: 2.9181 },
+                'Oostkamp': { count: 10, lat: 51.1558, lng: 3.2239 },
+                'Poperinge': { count: 3, lat: 50.8547, lng: 2.7344 },
+                'Roeselare': { count: 6, lat: 50.9464, lng: 3.1258 },
+                'Ronse': { count: 1, lat: 50.7494, lng: 3.6003 },
+                'Tielt': { count: 2, lat: 51.0000, lng: 3.3333 },
+                'Torhout': { count: 3, lat: 51.0669, lng: 3.1019 },
+                'Vleteren': { count: 1, lat: 50.929707, lng: 2.732738 },
+                'Wervik': { count: 2, lat: 50.7831, lng: 3.0397 },
+                'Wingene': { count: 16, lat: 51.05865, lng: 3.274799 },
+                'Zonnebeke': { count: 2, lat: 50.8667, lng: 2.9833 },
+                'Zuienkerke': { count: 1, lat: 51.2833, lng: 3.1833 }
+            };
+
+            const map = L.map('map').setView([51.05, 3.1], 9);
+
+            const municipalityBoundariesUrl = 'https://raw.githubusercontent.com/bmesuere/belgium-topojson/master/source_data/Gemeenten.json';
+
+            fetch(municipalityBoundariesUrl)
+                .then(response => response.json())
+                .then(data => {
+                    const objectKey = Object.keys(data.objects)[0];
+                    const geojsonData = topojson.feature(data, data.objects[objectKey]);
+
+                    const filteredFeatures = geojsonData.features.filter(feature => {
+                        const props = feature.properties;
+                        const municipalityName = (props.NAME_4 || '').toLowerCase().trim();
+                        const provinceName = (props.NAME_2 || '').toLowerCase().trim();
+                        return provinceName === 'west-vlaanderen' || 
+                               provinceName === 'west vlaanderen' ||
+                               municipalityName === 'ronse';
+                    });
+
+                    // --- Mask outside area ---
+                    const world = turf.polygon([[[-180, -90], [180, -90], [180, 90], [-180, 90], [-180, -90]]]);
+                    const selected = turf.union(...filteredFeatures.map(f => f));
+                    const mask = turf.difference(world, selected);
+
+                    L.geoJSON(mask, {
+                        style: {
+                            fillColor: "#fff",
+                            color: "#fff",
+                            weight: 0,
+                            fillOpacity: 1
+                        }
+                    }).addTo(map);
+
+                    // Draw filtered municipalities
+                    L.geoJSON(filteredFeatures, {
+                        style: {
+                            color: '#2E7D32',
+                            weight: 1.5,
+                            fillColor: '#4CAF50',
+                            fillOpacity: 0.08,
+                            dashArray: '4, 4'
+                        }
+                    }).addTo(map);
+
+                    // Add data bubbles
+                    addDataBubbles();
+                });
+
+            function getColor(count) {
+                if (count >= 30) return '#8B0000';
+                if (count >= 20) return '#DC143C';
+                if (count >= 15) return '#FF4500';
+                if (count >= 10) return '#FF6347';
+                if (count >= 5) return '#FFA500';
+                return '#FFD700';
+            }
+
+            function getRadius(count) {
+                return Math.sqrt(count) * 5 + 5;
+            }
+
+            function addDataBubbles() {
+                Object.entries(municipalityData).forEach(([name, data]) => {
+                    const circle = L.circleMarker([data.lat, data.lng], {
+                        radius: getRadius(data.count),
+                        fillColor: getColor(data.count),
+                        color: '#fff',
+                        weight: 2,
+                        opacity: 0.9,
+                        fillOpacity: 0.8
+                    });
+
+                    const popupContent = `
+                        <div style="text-align: center; min-width: 150px;">
+                            <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">${name}</h3>
+                            <div style="font-size: 24px; font-weight: bold; color: ${getColor(data.count)};">${data.count}</div>
+                            <div style="color: #666; font-size: 12px; margin-top: 5px;">gezinnen</div>
+                        </div>
+                    `;
+                    circle.bindPopup(popupContent);
+                    circle.addTo(map);
+                });
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initMap);
+        } else {
+            initMap();
+        }
+    </script>
+</body>
+</html>
