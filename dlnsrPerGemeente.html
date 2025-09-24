@@ -109,8 +109,6 @@
             color: #666;
             font-size: 14px;
         }
-        
-
     </style>
 </head>
 <body>
@@ -124,6 +122,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
     <script>
         // Wait for Leaflet to load
         function initMap() {
@@ -194,86 +193,154 @@
             return Math.sqrt(count) * 5 + 5;
         }
 
-        // Add circles for each municipality
-        let totalCount = 0;
-        Object.entries(municipalityData).forEach(([name, data]) => {
-            totalCount += data.count;
-            
-            const circle = L.circleMarker([data.lat, data.lng], {
-                radius: getRadius(data.count),
-                fillColor: getColor(data.count),
-                color: '#fff',
-                weight: 2,
-                opacity: 0.9,
-                fillOpacity: 0.8
-            });
-
-            // Popup content
-            const popupContent = `
-                <div style="text-align: center; min-width: 150px;">
-                    <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">${name}</h3>
-                    <div style="font-size: 24px; font-weight: bold; color: ${getColor(data.count)};">${data.count}</div>
-                    <div style="color: #666; font-size: 12px; margin-top: 5px;">gezinnen</div>
-                </div>
-            `;
-
-            circle.bindPopup(popupContent);
-            
-            // Add hover effects
-            circle.on('mouseover', function(e) {
-                this.setStyle({
-                    weight: 3,
-                    fillOpacity: 1
+        // Load municipality boundaries FIRST (so they appear below bubbles)
+        const municipalityBoundariesUrl = 'https://raw.githubusercontent.com/bmesuere/belgium-topojson/master/source_data/Gemeenten.json';
+        
+        fetch(municipalityBoundariesUrl)
+            .then(response => response.json())
+            .then(data => {
+                console.log('Municipality boundaries loaded');
+                
+                // Convert TopoJSON to GeoJSON
+                const objectKey = Object.keys(data.objects)[0];
+                const geojsonData = topojson.feature(data, data.objects[objectKey]);
+                
+                // Filter for West-Vlaanderen + Ronse
+                const filteredFeatures = geojsonData.features.filter(feature => {
+                    const props = feature.properties;
+                    const municipalityName = (props.NAME_4 || '').toLowerCase().trim();
+                    const provinceName = (props.NAME_2 || '').toLowerCase().trim();
+                    
+                    // Include all West-Vlaanderen municipalities OR specifically Ronse
+                    return provinceName === 'west-vlaanderen' || 
+                           provinceName === 'west vlaanderen' ||
+                           municipalityName === 'ronse';
                 });
+
+                console.log(`Found ${filteredFeatures.length} municipalities (West-Vlaanderen + Ronse)`);
+
+                // Add municipality boundaries (no popups, just visual boundaries)
+                L.geoJSON(filteredFeatures, {
+                    style: {
+                        color: '#2E7D32',
+                        weight: 1.5,
+                        opacity: 0.7,
+                        fillColor: '#4CAF50',
+                        fillOpacity: 0.08,
+                        dashArray: '4, 4'
+                    },
+                    onEachFeature: function(feature, layer) {
+                        // Remove popup - only keep hover effects
+                        layer.on('mouseover', function() {
+                            layer.setStyle({
+                                weight: 2,
+                                opacity: 0.9,
+                                fillOpacity: 0.15
+                            });
+                        });
+                        
+                        layer.on('mouseout', function() {
+                            layer.setStyle({
+                                weight: 1.5,
+                                opacity: 0.7,
+                                fillOpacity: 0.08
+                            });
+                        });
+                    }
+                }).addTo(map);
+
+                // Now add the data bubbles ON TOP of boundaries
+                addDataBubbles();
+            })
+            .catch(error => {
+                console.log('Could not load boundaries:', error);
+                // If boundaries fail, just add bubbles
+                addDataBubbles();
             });
 
-            circle.on('mouseout', function(e) {
-                this.setStyle({
+        // Function to add data bubbles (will be on top layer)
+        function addDataBubbles() {
+            let totalCount = 0;
+            
+            Object.entries(municipalityData).forEach(([name, data]) => {
+                totalCount += data.count;
+                
+                const circle = L.circleMarker([data.lat, data.lng], {
+                    radius: getRadius(data.count),
+                    fillColor: getColor(data.count),
+                    color: '#fff',
                     weight: 2,
+                    opacity: 0.9,
                     fillOpacity: 0.8
                 });
+
+                // Popup content for data bubbles
+                const popupContent = `
+                    <div style="text-align: center; min-width: 150px;">
+                        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">${name}</h3>
+                        <div style="font-size: 24px; font-weight: bold; color: ${getColor(data.count)};">${data.count}</div>
+                        <div style="color: #666; font-size: 12px; margin-top: 5px;">gezinnen</div>
+                    </div>
+                `;
+
+                circle.bindPopup(popupContent);
+                
+                // Add hover effects
+                circle.on('mouseover', function(e) {
+                    this.setStyle({
+                        weight: 3,
+                        fillOpacity: 1
+                    });
+                });
+
+                circle.on('mouseout', function(e) {
+                    this.setStyle({
+                        weight: 2,
+                        fillOpacity: 0.8
+                    });
+                });
+
+                circle.addTo(map);
             });
 
-            circle.addTo(map);
-        });
+            // Update total count
+            document.getElementById('total-count').textContent = totalCount;
 
-        // Update total count
-        document.getElementById('total-count').textContent = totalCount;
-
-        // Add legend
-        const legend = L.control({position: 'bottomright'});
-        legend.onAdd = function() {
-            const div = L.DomUtil.create('div', 'legend');
-            div.innerHTML = `
-                <h4>Gezinnen per Gemeente</h4>
-                <div class="legend-item">
-                    <div class="legend-circle" style="width: 25px; height: 25px; background-color: #8B0000;"></div>
-                    <span>30+ gezinnen</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-circle" style="width: 22px; height: 22px; background-color: #DC143C;"></div>
-                    <span>20-29 gezinnen</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-circle" style="width: 19px; height: 19px; background-color: #FF4500;"></div>
-                    <span>15-19 gezinnen</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-circle" style="width: 16px; height: 16px; background-color: #FF6347;"></div>
-                    <span>10-14 gezinnen</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-circle" style="width: 13px; height: 13px; background-color: #FFA500;"></div>
-                    <span>5-9 gezinnen</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-circle" style="width: 10px; height: 10px; background-color: #FFD700;"></div>
-                    <span>1-4 gezin(nen)</span>
-                </div>
-            `;
-            return div;
-        };
-        legend.addTo(map);
+            // Add legend
+            const legend = L.control({position: 'bottomright'});
+            legend.onAdd = function() {
+                const div = L.DomUtil.create('div', 'legend');
+                div.innerHTML = `
+                    <h4>Gezinnen per Gemeente</h4>
+                    <div class="legend-item">
+                        <div class="legend-circle" style="width: 25px; height: 25px; background-color: #8B0000;"></div>
+                        <span>30+ gezinnen</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-circle" style="width: 22px; height: 22px; background-color: #DC143C;"></div>
+                        <span>20-29 gezinnen</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-circle" style="width: 19px; height: 19px; background-color: #FF4500;"></div>
+                        <span>15-19 gezinnen</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-circle" style="width: 16px; height: 16px; background-color: #FF6347;"></div>
+                        <span>10-14 gezinnen</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-circle" style="width: 13px; height: 13px; background-color: #FFA500;"></div>
+                        <span>5-9 gezinnen</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-circle" style="width: 10px; height: 10px; background-color: #FFD700;"></div>
+                        <span>1-4 gezin(nen)</span>
+                    </div>
+                `;
+                return div;
+            };
+            legend.addTo(map);
+        }
         }
         
         // Initialize when page loads
