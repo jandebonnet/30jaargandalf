@@ -450,8 +450,14 @@
             let isDragging = false;
             let startX, startY;
             
-            headerElement.addEventListener('mousedown', function(e) {
-                console.log('Header clicked - starting drag');
+            // Mouse events
+            headerElement.addEventListener('mousedown', startDrag);
+            
+            // Touch events for mobile
+            headerElement.addEventListener('touchstart', startDrag, { passive: false });
+            
+            function startDrag(e) {
+                console.log('Header clicked/touched - starting drag');
                 e.preventDefault();
                 e.stopPropagation();
                 
@@ -459,19 +465,32 @@
                 legendElement.classList.add('dragging');
                 
                 const rect = legendElement.getBoundingClientRect();
-                startX = e.clientX - rect.left;
-                startY = e.clientY - rect.top;
                 
+                // Handle both mouse and touch events
+                const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+                const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+                
+                startX = clientX - rect.left;
+                startY = clientY - rect.top;
+                
+                // Add both mouse and touch listeners
                 document.addEventListener('mousemove', dragHandler);
                 document.addEventListener('mouseup', stopDragHandler);
-            });
+                document.addEventListener('touchmove', dragHandler, { passive: false });
+                document.addEventListener('touchend', stopDragHandler);
+            }
             
             function dragHandler(e) {
                 if (!isDragging) return;
                 console.log('Dragging legend');
+                e.preventDefault(); // Prevent scrolling on mobile
                 
-                let newLeft = e.clientX - startX;
-                let newTop = e.clientY - startY;
+                // Handle both mouse and touch events
+                const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+                const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+                
+                let newLeft = clientX - startX;
+                let newTop = clientY - startY;
                 
                 // Keep within bounds
                 newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - legendElement.offsetWidth));
@@ -488,8 +507,11 @@
                 isDragging = false;
                 legendElement.classList.remove('dragging');
                 
+                // Remove all listeners
                 document.removeEventListener('mousemove', dragHandler);
                 document.removeEventListener('mouseup', stopDragHandler);
+                document.removeEventListener('touchmove', dragHandler);
+                document.removeEventListener('touchend', stopDragHandler);
             }
         }
         
