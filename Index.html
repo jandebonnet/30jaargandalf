@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flemish Municipalities Service Distribution</title>
+    <title>Woonplaats deelnemers gezinsvakanties vzw Gandalf</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <style>
         body {
@@ -25,6 +25,42 @@
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        @media (max-width: 768px) {
+            .legend {
+                padding: 8px;
+                font-size: 12px;
+            }
+            
+            .legend h4 {
+                font-size: 13px;
+                margin: 0 0 6px 0;
+            }
+            
+            .legend-item {
+                margin: 4px 0;
+                font-size: 11px;
+            }
+            
+            .legend-circle {
+                margin-right: 6px;
+            }
+            
+            .info-panel {
+                padding: 10px;
+                max-width: 200px;
+            }
+            
+            .info-panel h3 {
+                font-size: 16px;
+                margin: 0 0 8px 0;
+            }
+            
+            .info-panel p {
+                font-size: 12px;
+                margin: 3px 0;
+            }
         }
         
         .legend h4 {
@@ -81,7 +117,7 @@
     <div id="map"></div>
     
     <div class="info-panel">
-        <h3>🏛️ Deelnemers per gemeente</h3>
+        <h3>🏛️ Aantal gezinnen per gemeente</h3>
         <p>Klik op de bubbels om de details te zien</p>
         <p>De grootte duidt het aantal deelnemende gezinnen aan</p>
         <p><strong>Total:</strong> <span id="total-count">0</span> gezinnen</p>
@@ -208,7 +244,7 @@
         legend.onAdd = function() {
             const div = L.DomUtil.create('div', 'legend');
             div.innerHTML = `
-                <h4>Aantal deelnemers per gemeente</h4>
+                <h4>Gezinnen per Gemeente</h4>
                 <div class="legend-item">
                     <div class="legend-circle" style="width: 25px; height: 25px; background-color: #8B0000;"></div>
                     <span>30+ gezinnen</span>
