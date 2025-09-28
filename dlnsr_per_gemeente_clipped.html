@@ -7,31 +7,155 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <style>
         body {
             margin: 0;
             padding: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #fff; /* force white background */
+            background: #fff;
         }
         #map {
             height: 100vh;
             width: 100%;
         }
         .leaflet-container {
-            background: #fff; /* make sure background stays white */
+            background: #fff;
+        }
+        .legend {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 0;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            user-select: none;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10000;
+            min-width: 200px;
+        }
+        .legend-header {
+            background: #2E7D32;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 10px 10px 0 0;
+            cursor: move;
+            font-weight: bold;
+            position: relative;
+        }
+        .legend-header::after {
+            content: "⋮⋮";
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.8;
+        }
+        .legend-content { padding: 15px; }
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            z-index: 1000;
+            max-width: 300px;
+        }
+        .toggle-info-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
         }
     </style>
 </head>
 <body>
     <div id="map"></div>
+    <button class="toggle-info-btn info-visible" id="toggleInfoBtn" title="Verberg/Toon info">ℹ️</button>
+    <div class="info-panel" id="infoPanel">
+        <h3>🏛️ Aantal gezinnen per gemeente</h3>
+        <p>Klik op de bubbels om de details te zien</p>
+        <p>De grootte duidt het aantal deelnemende gezinnen aan</p>
+        <p><strong>Total:</strong> <span id="total-count">0</span> gezinnen</p>
+    </div>
     <script>
         function initMap() {
             if (typeof L === 'undefined') {
                 setTimeout(initMap, 100);
                 return;
             }
+
+            const toggleBtn = document.getElementById('toggleInfoBtn');
+            const infoPanel = document.getElementById('infoPanel');
+            let isInfoVisible = true;
+            toggleBtn.addEventListener('click', function() {
+                isInfoVisible = !isInfoVisible;
+                if (isInfoVisible) {
+                    infoPanel.classList.remove('hidden');
+                    toggleBtn.classList.add('info-visible');
+                    toggleBtn.innerHTML = 'ℹ️';
+                } else {
+                    infoPanel.classList.add('hidden');
+                    toggleBtn.classList.remove('info-visible');
+                    toggleBtn.innerHTML = '📊';
+                }
+            });
+
+            const map = L.map('map').setView([51.05, 3.1], 10);
+
+            // No tile layer → plain white background
+
+            function getColor(count) {
+                if (count >= 30) return '#8B0000';
+                if (count >= 20) return '#DC143C';
+                if (count >= 15) return '#FF4500';
+                if (count >= 10) return '#FF6347';
+                if (count >= 5) return '#FFA500';
+                return '#FFD700';
+            }
+            function getRadius(count) { return Math.sqrt(count) * 5 + 5; }
+
+            const municipalityBoundariesUrl = 'https://raw.githubusercontent.com/bmesuere/belgium-topojson/master/source_data/Gemeenten.json';
+            fetch(municipalityBoundariesUrl)
+                .then(response => response.json())
+                .then(data => {
+                    const objectKey = Object.keys(data.objects)[0];
+                    const geojsonData = topojson.feature(data, data.objects[objectKey]);
+                    const filteredFeatures = geojsonData.features.filter(feature => {
+                        const props = feature.properties;
+                        const municipalityName = (props.NAME_4 || '').toLowerCase().trim();
+                        const provinceName = (props.NAME_2 || '').toLowerCase().trim();
+                        return provinceName === 'west-vlaanderen' || provinceName === 'west vlaanderen' || municipalityName === 'ronse';
+                    });
+                    L.geoJSON(filteredFeatures, {
+                        style: {
+                            color: '#2E7D32',
+                            weight: 1.5,
+                            fillColor: '#4CAF50',
+                            fillOpacity: 0.08,
+                            dashArray: '4, 4'
+                        }
+                    }).addTo(map);
+                    addDataBubbles();
+                    createDraggableLegend();
+                });
 
             const municipalityData = {
                 'Ardooie': { count: 1, lat: 50.976728, lng: 3.199116 },
@@ -70,69 +194,10 @@
                 'Zuienkerke': { count: 1, lat: 51.2833, lng: 3.1833 }
             };
 
-            const map = L.map('map').setView([51.05, 3.1], 9);
-
-            const municipalityBoundariesUrl = 'https://raw.githubusercontent.com/bmesuere/belgium-topojson/master/source_data/Gemeenten.json';
-
-            fetch(municipalityBoundariesUrl)
-                .then(response => response.json())
-                .then(data => {
-                    const objectKey = Object.keys(data.objects)[0];
-                    const geojsonData = topojson.feature(data, data.objects[objectKey]);
-
-                    const filteredFeatures = geojsonData.features.filter(feature => {
-                        const props = feature.properties;
-                        const municipalityName = (props.NAME_4 || '').toLowerCase().trim();
-                        const provinceName = (props.NAME_2 || '').toLowerCase().trim();
-                        return provinceName === 'west-vlaanderen' || 
-                               provinceName === 'west vlaanderen' ||
-                               municipalityName === 'ronse';
-                    });
-
-                    // --- Mask outside area ---
-                    const world = turf.polygon([[[-180, -90], [180, -90], [180, 90], [-180, 90], [-180, -90]]]);
-                    const selected = turf.union(...filteredFeatures.map(f => f));
-                    const mask = turf.difference(world, selected);
-
-                    L.geoJSON(mask, {
-                        style: {
-                            fillColor: "#fff",
-                            color: "#fff",
-                            weight: 0,
-                            fillOpacity: 1
-                        }
-                    }).addTo(map);
-
-                    // Draw filtered municipalities
-                    L.geoJSON(filteredFeatures, {
-                        style: {
-                            color: '#2E7D32',
-                            weight: 1.5,
-                            fillColor: '#4CAF50',
-                            fillOpacity: 0.08,
-                            dashArray: '4, 4'
-                        }
-                    }).addTo(map);
-
-                    // Add data bubbles
-                    addDataBubbles();
-                });
-
-            function getColor(count) {
-                if (count >= 30) return '#8B0000';
-                if (count >= 20) return '#DC143C';
-                if (count >= 15) return '#FF4500';
-                if (count >= 10) return '#FF6347';
-                if (count >= 5) return '#FFA500';
-                return '#FFD700';
-            }
-
-            function getRadius(count) {
-                return Math.sqrt(count) * 5 + 5;
-            }
-
             function addDataBubbles() {
+                let totalCount = 0;
                 Object.entries(municipalityData).forEach(([name, data]) => {
+                    totalCount += data.count;
                     const circle = L.circleMarker([data.lat, data.lng], {
                         radius: getRadius(data.count),
                         fillColor: getColor(data.count),
@@ -141,20 +206,29 @@
                         opacity: 0.9,
                         fillOpacity: 0.8
                     });
-
-                    const popupContent = `
-                        <div style="text-align: center; min-width: 150px;">
-                            <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">${name}</h3>
-                            <div style="font-size: 24px; font-weight: bold; color: ${getColor(data.count)};">${data.count}</div>
-                            <div style="color: #666; font-size: 12px; margin-top: 5px;">gezinnen</div>
-                        </div>
-                    `;
+                    const popupContent = `<div style="text-align:center;min-width:150px;"><h3>${name}</h3><div style="font-size:24px;font-weight:bold;color:${getColor(data.count)};">${data.count}</div><div style="font-size:12px;">gezinnen</div></div>`;
                     circle.bindPopup(popupContent);
                     circle.addTo(map);
                 });
+                document.getElementById('total-count').textContent = totalCount;
+            }
+
+            function createDraggableLegend() {
+                const legend = document.createElement('div');
+                legend.className = 'legend';
+                legend.innerHTML = `
+                    <div class="legend-header">Gezinnen per Gemeente</div>
+                    <div class="legend-content">
+                        <div><span style="color:#8B0000;font-weight:bold;">●</span> 30+ gezinnen</div>
+                        <div><span style="color:#DC143C;font-weight:bold;">●</span> 20-29 gezinnen</div>
+                        <div><span style="color:#FF4500;font-weight:bold;">●</span> 15-19 gezinnen</div>
+                        <div><span style="color:#FF6347;font-weight:bold;">●</span> 10-14 gezinnen</div>
+                        <div><span style="color:#FFA500;font-weight:bold;">●</span> 5-9 gezinnen</div>
+                        <div><span style="color:#FFD700;font-weight:bold;">●</span> 1-4 gezin(nen)</div>
+                    </div>`;
+                document.body.appendChild(legend);
             }
         }
-
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initMap);
         } else {
